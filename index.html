@@ -4,38 +4,396 @@
 <meta charset="UTF-8" />
 <title>拍完才疊圖（iPhone Safari / MP4 下載）</title>
 <style>
-  html, body { margin:0; background:#000; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto; }
-  .stage { display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px; }
-  video, canvas { max-width:100%; background:#000; }
-  .controls { display:flex; gap:8px; flex-wrap:wrap; }
-  button { padding:10px 16px; font-size:16px; }
+  html, body { 
+    margin: 0; 
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    background: #2d3748;
+  }
+  
+  .stage { 
+    display: flex; 
+    flex-direction: column; 
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+  }
+  
+  /* 首頁樣式 */
+  .home-page {
+    background: #f5f5f5;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+  }
+  
+  .home-title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #e53e3e;
+    margin-bottom: 20px;
+  }
+  
+  .main-display {
+    width: 280px;
+    height: 500px;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 40px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  
+  .enter-btn {
+    background: #4a5568;
+    color: white;
+    border: none;
+    padding: 16px 60px;
+    font-size: 18px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  
+  .enter-btn:hover {
+    background: #2d3748;
+  }
+  
+  /* 相機頁面樣式 */
+  .camera-page {
+    background: #2d3748;
+    color: white;
+    display: none;
+  }
+  
+  .camera-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  
+  .camera-display {
+    width: 90%;
+    max-width: 350px;
+    height: 600px;
+    background: #000;
+    border: 3px solid #4a5568;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 40px;
+  }
+  
+  .camera-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #e53e3e;
+    font-size: 16px;
+    z-index: 10;
+  }
+  
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .record-btn {
+    width: 80px;
+    height: 80px;
+    background: #e53e3e;
+    border: none;
+    border-radius: 50%;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .record-btn:hover {
+    transform: scale(1.1);
+  }
+  
+  .record-btn:disabled {
+    background: #666;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .record-btn.recording {
+    background: #c53030;
+    animation: pulse 1s infinite;
+    border-radius: 12px;
+    width: 60px;
+    height: 60px;
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  
+  /* 預覽/出圖頁面樣式 */
+  .preview-page {
+    background: #2d3748;
+    color: white;
+    display: none;
+    min-height: 100vh;
+  }
+  
+  .preview-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+  
+  .preview-display {
+    width: 90%;
+    max-width: 350px;
+    aspect-ratio: 9/16;
+    background: #000;
+    border: 3px solid #4a5568;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .preview-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #e53e3e;
+    font-size: 16px;
+    z-index: 10;
+  }
+  
+  canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  .bottom-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 200px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .save-btn, .back-btn {
+    background: #4a5568;
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 16px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 500;
+    width: 100%;
+  }
+  
+  .save-btn {
+    background: #4a5568;
+  }
+  
+  .save-btn:hover {
+    background: #2d3748;
+  }
+  
+  .back-btn:hover {
+    background: #2d3748;
+  }
+  
+  /* 錄影計時器 */
+  .recording-timer {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 100;
+    display: none;
+  }
+  
+  .recording-timer.active {
+    display: block;
+    animation: blink 1s infinite;
+  }
+  
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.7; }
+  }
+
+  /* 返回按鈕（頂部） */
+  .top-nav {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+  }
+  
+  .return-btn {
+    background: #e53e3e;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    display: none;
+  }
+  
+  .return-btn:hover {
+    background: #c53030;
+  }
+  
+  /* 隱藏默認元素 */
+  .controls {
+    display: none;
+  }
+  
+  #previewCanvas, #previewSrc {
+    display: none;
+  }
+  
+  /* 響應式設計 */
+  @media (max-width: 480px) {
+    .main-display, .camera-display {
+      width: 95%;
+      height: 70vh;
+    }
+    
+    .preview-display {
+      width: 95%;
+      max-width: none;
+      aspect-ratio: 9/16;
+    }
+    
+    .preview-container {
+      padding: 10px;
+      justify-content: flex-start;
+      gap: 20px;
+    }
+    
+    .home-title {
+      font-size: 24px;
+    }
+    
+    .enter-btn {
+      padding: 14px 40px;
+      font-size: 16px;
+    }
+    
+    .bottom-controls {
+      width: 90%;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    
+    /* 確保手機版畫面不會超出螢幕 */
+    .stage {
+      height: 100vh;
+      overflow: hidden;
+    }
+  }
 </style>
 </head>
 <body>
   <div class="stage">
-    <!-- 拍攝畫面（純相機） -->
-    <video id="camera" autoplay playsinline muted></video>
+    <!-- 首頁 -->
+    <div id="homePage" class="home-page">
+      <div class="main-display">
+        <span style="color: #e53e3e;">主視覺</span>
+      </div>
+      <button class="enter-btn" onclick="enterCamera()">進入</button>
+    </div>
 
-    <!-- 停錄後的原始影片來源（隱藏，只拿來餵給 canvas） -->
+    <!-- 相機頁面 -->
+    <div id="cameraPage" class="camera-page">
+      <div class="recording-timer" id="recordingTimer">00:00</div>
+      <div class="camera-container">
+        <div class="camera-display">
+          <div class="camera-label">相機畫面</div>
+          <video id="camera" autoplay playsinline muted></video>
+        </div>
+        <button id="recordBtn" class="record-btn" onclick="toggleRecording()"></button>
+      </div>
+    </div>
+
+    <!-- 預覽/出圖頁面 -->
+    <div id="previewPage" class="preview-page">
+      <div class="preview-container">
+        <div class="preview-display">
+          <div class="preview-label">出圖</div>
+          <canvas id="previewCanvas"></canvas>
+        </div>
+        <div class="bottom-controls">
+          <button class="save-btn" onclick="saveVideo()">儲存</button>
+          <button class="back-btn" onclick="backToCamera()">返回</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 隱藏的元素 -->
     <video id="previewSrc" style="display:none;" playsinline></video>
-
-    <!-- 預覽畫布（顯示：原影片 + 覆蓋圖） -->
-    <canvas id="previewCanvas" style="display:none;"></canvas>
-
-    <div class="controls">
+    <div class="controls" style="display:none;">
       <button id="startBtn">開始錄影</button>
       <button id="stopBtn" disabled>停止錄影</button>
       <button id="saveBtn" style="display:none;">儲存（MP4）</button>
     </div>
-  </div>
+  </div></body>
 
 <script src="gifler.min.js"></script>
 <script>
+// UI 元素
+const homePage = document.getElementById('homePage');
+const cameraPage = document.getElementById('cameraPage');
+const previewPage = document.getElementById('previewPage');
+
 const camera = document.getElementById('camera');
 const previewSrc = document.getElementById('previewSrc');
 const previewCanvas = document.getElementById('previewCanvas');
 const pctx = previewCanvas.getContext('2d');
 
+const recordBtn = document.getElementById('recordBtn');
+const recordingTimer = document.getElementById('recordingTimer');
 const startBtn = document.getElementById('startBtn');
 const stopBtn  = document.getElementById('stopBtn');
 const saveBtn  = document.getElementById('saveBtn');
@@ -43,6 +401,139 @@ const saveBtn  = document.getElementById('saveBtn');
 let mediaRecorder;
 let recordedChunks = [];
 let rafId;
+let isRecording = false;
+let recordingStartTime = 0;
+let timerInterval = null;
+
+// 頁面切換功能
+function showPage(pageToShow) {
+  homePage.style.display = 'none';
+  cameraPage.style.display = 'none';
+  previewPage.style.display = 'none';
+  
+  pageToShow.style.display = 'flex';
+}
+
+function enterCamera() {
+  showPage(cameraPage);
+  
+  // 顯示相機畫面並隱藏標籤
+  camera.style.display = 'block';
+  const cameraLabel = document.querySelector('.camera-label');
+  if (cameraLabel && camera.srcObject) {
+    cameraLabel.style.display = 'none';
+  }
+}
+
+function returnHome() {
+  showPage(homePage);
+  // 停止錄影（如果正在錄影）
+  if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    isRecording = false;
+    recordBtn.classList.remove('recording');
+    stopTimer();
+  }
+}
+
+function backToCamera() {
+  showPage(cameraPage);
+}
+
+function goToPreview() {
+  showPage(previewPage);
+}
+
+// 計時器功能
+function startTimer() {
+  recordingStartTime = Date.now();
+  recordingTimer.classList.add('active');
+  
+  timerInterval = setInterval(() => {
+    const elapsed = Date.now() - recordingStartTime;
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    
+    const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    recordingTimer.textContent = timeString;
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  recordingTimer.classList.remove('active');
+  recordingTimer.textContent = '00:00';
+}
+
+// 錄影切換功能
+function toggleRecording() {
+  if (!isRecording) {
+    startRecording();
+  } else {
+    stopRecording();
+  }
+}
+
+function startRecording() {
+  recordedChunks = [];
+  isRecording = true;
+  recordBtn.classList.add('recording');
+  startTimer();
+  
+  // 使用原有的錄影邏輯
+  const tryTypes = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+  let options = {};
+  for (const t of tryTypes) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+      options = { mimeType: t };
+      break;
+    }
+  }
+  try {
+    mediaRecorder = new MediaRecorder(camera.srcObject, options);
+  } catch {
+    mediaRecorder = new MediaRecorder(camera.srcObject);
+  }
+
+  mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/mp4' });
+    previewSrc.src = URL.createObjectURL(blob);
+    if (previewSrc.readyState >= 1) {
+      startOverlayPreview();
+      goToPreview();
+    } else {
+      previewSrc.onloadedmetadata = () => {
+        startOverlayPreview();
+        goToPreview();
+      };
+    }
+  };
+
+  mediaRecorder.start();
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    isRecording = false;
+    recordBtn.classList.remove('recording');
+    stopTimer();
+  }
+}
+
+function saveVideo() {
+  // 使用原有的儲存邏輯（觸發原本的 saveBtn 點擊）
+  saveBtn.click();
+}
 
 // Gifler GIF 動畫播放器
 class GifAnimationPlayer {
@@ -144,7 +635,16 @@ function drawGifOverlay(ctx, width, height) {
 
 // 1) 啟動相機（iPhone Safari：記得 https 網站/本機用 file:// 可能不行）
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-  .then(stream => { camera.srcObject = stream; })
+  .then(stream => { 
+    camera.srcObject = stream;
+    // 相機啟動後隱藏標籤
+    const cameraLabel = document.querySelector('.camera-label');
+    if (cameraLabel) {
+      camera.addEventListener('loadedmetadata', () => {
+        cameraLabel.style.display = 'none';
+      });
+    }
+  })
   .catch(err => alert("無法開啟相機: " + err.message));
 
 // 2) 開始錄影：純相機串流（不加圖）
@@ -192,29 +692,65 @@ stopBtn.onclick = () => {
 
 // 4) 停錄後：顯示「有疊圖」預覽（畫在 canvas 上）
 function startOverlayPreview() {
-  camera.style.display = 'none';
-  previewCanvas.style.display = 'block';
-  saveBtn.style.display = 'inline-block';
-
-  previewCanvas.width  = previewSrc.videoWidth  || 720;
-  previewCanvas.height = previewSrc.videoHeight || 1280;
-
-  previewSrc.currentTime = 0;
-  previewSrc.play();
-
-  const render = () => {
-    if (previewSrc.ended || previewSrc.paused) { rafId && cancelAnimationFrame(rafId); return; }
+  console.log('開始預覽，視頻尺寸:', previewSrc.videoWidth, 'x', previewSrc.videoHeight);
+  
+  // 等待視頻載入完成
+  const setupPreview = () => {
+    // 設置 canvas 尺寸為影片的原始尺寸
+    const videoWidth = previewSrc.videoWidth || 720;
+    const videoHeight = previewSrc.videoHeight || 1280;
     
-    // 先畫影片
-    pctx.drawImage(previewSrc, 0, 0, previewCanvas.width, previewCanvas.height);
+    previewCanvas.width = videoWidth;
+    previewCanvas.height = videoHeight;
     
-    // 再畫 GIF 動畫覆蓋層
-    drawGifOverlay(pctx, previewCanvas.width, previewCanvas.height);
+    console.log('Canvas 尺寸設置為:', previewCanvas.width, 'x', previewCanvas.height);
+    console.log('影片比例:', (videoWidth / videoHeight).toFixed(2));
+
+    // 顯示 canvas 並隱藏標籤
+    previewCanvas.style.display = 'block';
+    const previewLabel = document.querySelector('.preview-label');
+    if (previewLabel) previewLabel.style.display = 'none';
     
-    rafId = requestAnimationFrame(render);
+    previewSrc.currentTime = 0;
+    previewSrc.play();
+
+    const render = () => {
+      if (previewSrc.ended || previewSrc.paused) { 
+        rafId && cancelAnimationFrame(rafId);
+        // 影片結束時重新播放
+        if (previewSrc.ended) {
+          previewSrc.currentTime = 0;
+          previewSrc.play();
+        }
+        return; 
+      }
+      
+      // 清除畫布
+      pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+      
+      // 先畫影片
+      try {
+        pctx.drawImage(previewSrc, 0, 0, previewCanvas.width, previewCanvas.height);
+      } catch(e) {
+        console.error('繪製視頻時出錯:', e);
+      }
+      
+      // 再畫 GIF 動畫覆蓋層
+      drawGifOverlay(pctx, previewCanvas.width, previewCanvas.height);
+      
+      rafId = requestAnimationFrame(render);
+    };
+    
+    rafId && cancelAnimationFrame(rafId);
+    render();
   };
-  rafId && cancelAnimationFrame(rafId);
-  render();
+
+  // 確保視頻已載入元數據
+  if (previewSrc.readyState >= 1) {
+    setupPreview();
+  } else {
+    previewSrc.addEventListener('loadedmetadata', setupPreview, { once: true });
+  }
 }
 
 // 5) 按「儲存」：把 canvas（預覽畫面）錄成影片，並「直接觸發下載」
