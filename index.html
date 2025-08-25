@@ -216,6 +216,38 @@
     cursor: pointer;
     font-weight: 500;
     width: 100%;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+  
+  .save-btn.saving {
+    background: #666;
+    cursor: not-allowed;
+  }
+  
+  .save-btn .loading-spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #transparent;
+    border-top: 2px solid #white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+  }
+  
+  .save-btn.saving .loading-spinner {
+    display: inline-block;
+  }
+  
+  .save-btn .progress-text {
+    font-size: 14px;
+    opacity: 0.8;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
   
   .save-btn {
@@ -365,7 +397,11 @@
           <canvas id="previewCanvas"></canvas>
         </div>
         <div class="bottom-controls">
-          <button class="save-btn" onclick="saveVideo()">儲存</button>
+          <button class="save-btn" onclick="saveVideo()">
+            <span class="loading-spinner"></span>
+            <span class="save-text">儲存</span>
+            <div class="progress-text" style="display: none;"></div>
+          </button>
           <button class="back-btn" onclick="backToCamera()">返回</button>
         </div>
       </div>
@@ -531,6 +567,16 @@ function stopRecording() {
 }
 
 function saveVideo() {
+  const saveBtnElement = document.querySelector('.save-btn');
+  const saveText = saveBtnElement.querySelector('.save-text');
+  const progressText = saveBtnElement.querySelector('.progress-text');
+  
+  // 顯示載入狀態
+  saveBtnElement.classList.add('saving');
+  saveText.textContent = '準備中...';
+  progressText.style.display = 'block';
+  progressText.textContent = '0%';
+  
   // 使用原有的儲存邏輯（觸發原本的 saveBtn 點擊）
   saveBtn.click();
 }
@@ -756,9 +802,23 @@ function startOverlayPreview() {
 // 5) 按「儲存」：把 canvas（預覽畫面）錄成影片，並「直接觸發下載」
 //    說明：為了相容 iPhone Safari，這裡預設不含音訊；格式盡量用 MP4。
 saveBtn.onclick = async () => {
+  const saveBtnElement = document.querySelector('.save-btn');
+  const saveText = saveBtnElement.querySelector('.save-text');
+  const progressText = saveBtnElement.querySelector('.progress-text');
+  
+  // 更新進度狀態
+  const updateProgress = (percent, status) => {
+    progressText.textContent = `${percent}%`;
+    saveText.textContent = status;
+  };
+  
+  updateProgress(10, '初始化中...');
+  
   // 讓來源影片再播一遍，邊播邊把畫面錄下來
   previewSrc.currentTime = 0;
   await previewSrc.play();
+  
+  updateProgress(20, '準備錄影...');
 
   const canvasStream = previewCanvas.captureStream(30); // 30fps
   // 優先 mp4
@@ -781,13 +841,19 @@ saveBtn.onclick = async () => {
     outRecorder = new MediaRecorder(canvasStream); // 讓瀏覽器自選（iOS 多半仍會給 mp4）
   }
 
+  updateProgress(30, '開始錄影...');
+
   const outChunks = [];
   outRecorder.ondataavailable = e => { if (e.data && e.data.size) outChunks.push(e.data); };
   outRecorder.onstop = () => {
+    updateProgress(80, '生成檔案...');
+    
     // 產生 blob 後，直接「建立 a 並 click()」→ 觸發下載
     const type = outRecorder.mimeType || 'video/mp4';
     const outBlob = new Blob(outChunks, { type });
     const url = URL.createObjectURL(outBlob);
+
+    updateProgress(90, '準備下載...');
 
     const a = document.createElement('a');
     a.href = url;
@@ -798,18 +864,38 @@ saveBtn.onclick = async () => {
     a.click();
     a.remove();
 
+    updateProgress(100, '完成！');
+
+    // 恢復按鈕狀態
+    setTimeout(() => {
+      saveBtnElement.classList.remove('saving');
+      saveText.textContent = '儲存';
+      progressText.style.display = 'none';
+    }, 1000);
+
     // 釋放 URL
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
 
   outRecorder.start();
 
-  // 跟著影片長度錄完為止
+  // 跟著影片長度錄完為止，並更新錄影進度
+  const videoDuration = previewSrc.duration || 5; // 預設 5 秒如果無法取得長度
+  const startTime = Date.now();
+  
   const endWhenFinished = () => {
     if (previewSrc.ended || previewSrc.paused) {
+      updateProgress(70, '處理中...');
       outRecorder.stop();
       return;
     }
+    
+    // 計算錄影進度 (30% - 70%)
+    const elapsed = (Date.now() - startTime) / 1000;
+    const recordProgress = Math.min((elapsed / videoDuration) * 40, 40); // 40% 的範圍
+    const currentProgress = 30 + recordProgress;
+    updateProgress(Math.floor(currentProgress), '處理中...');
+    
     requestAnimationFrame(endWhenFinished);
   };
   endWhenFinished();
