@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>拍完才疊圖（iPhone Safari / MP4 下載）</title>
+<style>
+  html, body { margin:0; background:#000; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto; }
+  .stage { display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px; }
+  video, canvas { max-width:100%; background:#000; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; }
+  button { padding:10px 16px; font-size:16px; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- 拍攝畫面（純相機） -->
+    <video id="camera" autoplay playsinline muted></video>
+
+    <!-- 停錄後的原始影片來源（隱藏，只拿來餵給 canvas） -->
+    <video id="previewSrc" style="display:none;" playsinline></video>
+
+    <!-- 預覽畫布（顯示：原影片 + 覆蓋圖） -->
+    <canvas id="previewCanvas" style="display:none;"></canvas>
+
+    <div class="controls">
+      <button id="startBtn">開始錄影</button>
+      <button id="stopBtn" disabled>停止錄影</button>
+      <button id="saveBtn" style="display:none;">儲存（MP4）</button>
+    </div>
+  </div>
+
+<script src="gifler.min.js"></script>
+<script>
+const camera = document.getElementById('camera');
+const previewSrc = document.getElementById('previewSrc');
+const previewCanvas = document.getElementById('previewCanvas');
+const pctx = previewCanvas.getContext('2d');
+
+const startBtn = document.getElementById('startBtn');
+const stopBtn  = document.getElementById('stopBtn');
+const saveBtn  = document.getElementById('saveBtn');
+
+let mediaRecorder;
+let recordedChunks = [];
+let rafId;
+
+// Gifler GIF 動畫播放器
+class GifAnimationPlayer {
+  constructor(gifPath) {
+    this.gifPath = gifPath;
+    this.isLoaded = false;
+    this.animationCanvas = document.createElement('canvas');
+    this.animationCtx = this.animationCanvas.getContext('2d');
+    this.currentFrame = null;
+    
+    this.loadGif();
+  }
+  
+  async loadGif() {
+    console.log('開始載入 GIF:', this.gifPath);
+    
+    try {
+      // 檢查 gifler 是否可用
+      if (typeof gifler === 'undefined') {
+        throw new Error('gifler 庫未載入');
+      }
+      
+      // 使用 gifler 載入和播放 GIF
+      gifler(this.gifPath).frames(this.animationCanvas, (ctx, frame) => {
+        // 每一幀的回調函數
+        if (!this.isLoaded) {
+          this.animationCanvas.width = frame.width;
+          this.animationCanvas.height = frame.height;
+          this.isLoaded = true;
+          console.log('GIF 載入成功，尺寸:', frame.width, 'x', frame.height);
+        }
+        
+        // 清除並繪製當前幀
+        ctx.clearRect(0, 0, this.animationCanvas.width, this.animationCanvas.height);
+        ctx.drawImage(frame.buffer, 0, 0);
+        this.currentFrame = frame;
+      });
+      
+    } catch (error) {
+      console.error('GIF 載入失敗:', error);
+      this.loadAsImage();
+    }
+  }
+  
+  loadAsImage() {
+    // 備用方案：靜態圖片
+    console.log('回退到靜態圖片模式');
+    const img = new Image();
+    img.onload = () => {
+      this.isLoaded = true;
+      this.staticImage = img;
+      console.log('使用靜態圖片作為備用:', img.width, 'x', img.height);
+    };
+    img.onerror = () => {
+      console.error('靜態圖片載入也失敗');
+    };
+    img.src = this.gifPath;
+  }
+  
+  draw(ctx, x, y, width, height) {
+    if (!this.isLoaded) return;
+    
+    ctx.save();
+    
+    if (this.currentFrame && this.animationCanvas.width > 0) {
+      // 繪製當前動畫幀
+      ctx.drawImage(this.animationCanvas, x, y, width, height);
+    } else if (this.staticImage && this.staticImage.complete) {
+      // 繪製靜態圖片
+      ctx.drawImage(this.staticImage, x, y, width, height);
+    }
+    
+    ctx.restore();
+  }
+}
+
+// 初始化 GIF 播放器（使用 tenor.gif）
+const gifPlayer = new GifAnimationPlayer('tenor.gif');
+
+// 動畫時間變數
+let overlayAnimationTime = 0;
+
+// GIF 動畫覆蓋層函數
+function drawGifOverlay(ctx, width, height) {
+  // 背景文字
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.font = `${Math.min(width, height) * 0.06}px Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('What is Kaohsiung', width / 2, height * 0.8);
+  ctx.restore();
+  
+  // 繪製 GIF 動畫 (覆蓋整個畫面)
+  if (gifPlayer.isLoaded) {
+    gifPlayer.draw(ctx, 0, 0, width, height);
+  }
+}
+
+// 1) 啟動相機（iPhone Safari：記得 https 網站/本機用 file:// 可能不行）
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+  .then(stream => { camera.srcObject = stream; })
+  .catch(err => alert("無法開啟相機: " + err.message));
+
+// 2) 開始錄影：純相機串流（不加圖）
+startBtn.onclick = () => {
+  recordedChunks = [];
+
+  // iOS Safari 通常會輸出 mp4，就算不指定 mimeType 也 OK
+  const tryTypes = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+  let options = {};
+  for (const t of tryTypes) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+      options = { mimeType: t };
+      break;
+    }
+  }
+  try {
+    mediaRecorder = new MediaRecorder(camera.srcObject, options);
+  } catch {
+    mediaRecorder = new MediaRecorder(camera.srcObject); // 讓瀏覽器自選
+  }
+
+  mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/mp4' });
+    previewSrc.src = URL.createObjectURL(blob);
+    if (previewSrc.readyState >= 1) startOverlayPreview();
+    else previewSrc.onloadedmetadata = startOverlayPreview;
+  };
+
+  mediaRecorder.start();
+  startBtn.disabled = true;
+  stopBtn.disabled  = false;
+};
+
+// 3) 停止錄影
+stopBtn.onclick = () => {
+  mediaRecorder.stop();
+  stopBtn.disabled  = true;
+  startBtn.disabled = false;
+};
+
+// 4) 停錄後：顯示「有疊圖」預覽（畫在 canvas 上）
+function startOverlayPreview() {
+  camera.style.display = 'none';
+  previewCanvas.style.display = 'block';
+  saveBtn.style.display = 'inline-block';
+
+  previewCanvas.width  = previewSrc.videoWidth  || 720;
+  previewCanvas.height = previewSrc.videoHeight || 1280;
+
+  previewSrc.currentTime = 0;
+  previewSrc.play();
+
+  const render = () => {
+    if (previewSrc.ended || previewSrc.paused) { rafId && cancelAnimationFrame(rafId); return; }
+    
+    // 先畫影片
+    pctx.drawImage(previewSrc, 0, 0, previewCanvas.width, previewCanvas.height);
+    
+    // 再畫 GIF 動畫覆蓋層
+    drawGifOverlay(pctx, previewCanvas.width, previewCanvas.height);
+    
+    rafId = requestAnimationFrame(render);
+  };
+  rafId && cancelAnimationFrame(rafId);
+  render();
+}
+
+// 5) 按「儲存」：把 canvas（預覽畫面）錄成影片，並「直接觸發下載」
+//    說明：為了相容 iPhone Safari，這裡預設不含音訊；格式盡量用 MP4。
+saveBtn.onclick = async () => {
+  // 讓來源影片再播一遍，邊播邊把畫面錄下來
+  previewSrc.currentTime = 0;
+  await previewSrc.play();
+
+  const canvasStream = previewCanvas.captureStream(30); // 30fps
+  // 優先 mp4
+  const tryTypes = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+  let recOptions = {};
+  for (const t of tryTypes) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+      recOptions = { mimeType: t };
+      break;
+    }
+  }
+  let outRecorder;
+  try {
+    outRecorder = new MediaRecorder(canvasStream, recOptions);
+  } catch {
+    outRecorder = new MediaRecorder(canvasStream); // 讓瀏覽器自選（iOS 多半仍會給 mp4）
+  }
+
+  const outChunks = [];
+  outRecorder.ondataavailable = e => { if (e.data && e.data.size) outChunks.push(e.data); };
+  outRecorder.onstop = () => {
+    // 產生 blob 後，直接「建立 a 並 click()」→ 觸發下載
+    const type = outRecorder.mimeType || 'video/mp4';
+    const outBlob = new Blob(outChunks, { type });
+    const url = URL.createObjectURL(outBlob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'video_with_overlay.mp4';   // iPhone Safari 會用副檔名判斷
+    a.rel = 'noopener';
+    // iOS 有時會忽略 download，但仍會開啟檔案頁面，可再「儲存影片」
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    // 釋放 URL
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+
+  outRecorder.start();
+
+  // 跟著影片長度錄完為止
+  const endWhenFinished = () => {
+    if (previewSrc.ended || previewSrc.paused) {
+      outRecorder.stop();
+      return;
+    }
+    requestAnimationFrame(endWhenFinished);
+  };
+  endWhenFinished();
+};
+</script>
+</body>
+</html>
